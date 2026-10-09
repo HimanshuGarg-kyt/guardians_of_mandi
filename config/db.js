@@ -13,12 +13,44 @@ const schemaPath = path.join(rootDir, "database", "schema.sql");
 
 let db;
 let lastId = 0;
+let persistTimer = null;
 
-function persist() {
+const PERSIST_DELAY_MS = 250;
+
+function writeDb() {
   if (!db) return;
   fs.mkdirSync(dataDir, { recursive: true });
-  // sql.js export() resets last_insert_rowid(), so callers must snapshot the id first.
+  // sql.js export() resets last_insert_rowid(), so callers must snapshot the id
+  // first (see run()).
   fs.writeFileSync(dbPath, Buffer.from(db.export()));
+}
+
+// Writing the whole database on every statement is O(database size) per write
+// and blocks the event loop. Coalesce writes into a trailing debounce and flush
+// synchronously on exit so no data is lost.
+function persist() {
+  if (!db) return;
+  if (persistTimer) clearTimeout(persistTimer);
+  persistTimer = setTimeout(() => {
+    persistTimer = null;
+    writeDb();
+  }, PERSIST_DELAY_MS);
+}
+
+function flushPersist() {
+  if (persistTimer) {
+    clearTimeout(persistTimer);
+    persistTimer = null;
+  }
+  writeDb();
+}
+
+process.on("exit", flushPersist);
+for (const signal of ["SIGINT", "SIGTERM"]) {
+  process.on(signal, () => {
+    flushPersist();
+    process.exit(0);
+  });
 }
 
 export async function initDb() {

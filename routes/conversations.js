@@ -48,9 +48,11 @@ router.get("/:id/messages", authMiddleware, (req, res) => {
     return res.status(404).json({ error: "Conversation not found" });
   }
 
-  const messages = listMessages(conversationId, req.query.q || "").map(
-    formatMessage
-  );
+  // req.query.q can be an array/object when the query string is repeated
+  // (?q[]=a&q[]=b), so coerce it to a string before searching.
+  const search =
+    typeof req.query.q === "string" ? req.query.q : String(req.query.q ?? "");
+  const messages = listMessages(conversationId, search).map(formatMessage);
   res.json({ messages });
 });
 

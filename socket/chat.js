@@ -9,6 +9,8 @@ import {
   markConversationRead,
 } from "../models/Message.js";
 
+const MAX_MESSAGE_LENGTH = 2000;
+
 const onlineUsers = new Map();
 
 function addOnline(userId, socketId) {
@@ -38,18 +40,30 @@ export function initChatSocket(io) {
     addOnline(userId, socket.id);
     io.emit("presence:update", { onlineUserIds: onlineIds() });
 
-    socket.on("conversation:join", ({ conversationId }) => {
-      const conversation = getConversationForUser(Number(conversationId), userId);
-      if (!conversation) return;
-      socket.join(`conversation:${conversation.id}`);
+    // Every handler destructures its payload inside the callback (never in the
+    // parameter list) and is wrapped in try/catch: Socket.IO does not catch
+    // handler exceptions, so an unguarded throw would crash the whole process.
+    socket.on("conversation:join", (payload) => {
+      try {
+        const conversation = getConversationForUser(
+          Number(payload?.conversationId),
+          userId
+        );
+        if (!conversation) return;
+        socket.join(`conversation:${conversation.id}`);
+      } catch (error) {
+        console.error("conversation:join failed:", error);
+      }
     });
 
-    socket.on("conversation:start", ({ userId: otherUserId }, ack) => {
+    socket.on("conversation:start", (payload, ack) => {
       try {
-        const conversation = getOrCreateDirectConversation(
-          userId,
-          Number(otherUserId)
-        );
+        const otherUserId = Number(payload?.userId);
+        if (!Number.isInteger(otherUserId)) {
+          ack?.({ ok: false, error: "userId must be a number" });
+          return;
+        }
+        const conversation = getOrCreateDirectConversation(userId, otherUserId);
         socket.join(`conversation:${conversation.id}`);
         ack?.({ ok: true, conversationId: conversation.id });
       } catch (error) {
@@ -57,15 +71,25 @@ export function initChatSocket(io) {
       }
     });
 
-    socket.on("message:send", ({ conversationId, content }, ack) => {
+    socket.on("message:send", (payload, ack) => {
       try {
-        const text = String(content || "").trim();
+        const text = String(payload?.content ?? "").trim();
         if (!text) {
           ack?.({ ok: false, error: "Message cannot be empty" });
           return;
         }
+        if (text.length > MAX_MESSAGE_LENGTH) {
+          ack?.({
+            ok: false,
+            error: `Message cannot exceed ${MAX_MESSAGE_LENGTH} characters`,
+          });
+          return;
+        }
 
-        const conversation = getConversationForUser(Number(conversationId), userId);
+        const conversation = getConversationForUser(
+          Number(payload?.conversationId),
+          userId
+        );
         if (!conversation) {
           ack?.({ ok: false, error: "Conversation not found" });
           return;
@@ -91,33 +115,47 @@ export function initChatSocket(io) {
       }
     });
 
-    socket.on("typing", ({ conversationId, isTyping }) => {
-      const conversation = getConversationForUser(Number(conversationId), userId);
-      if (!conversation) return;
-      const otherId =
-        conversation.user_a_id === userId
-          ? conversation.user_b_id
-          : conversation.user_a_id;
-      io.to(`user:${otherId}`).emit("typing", {
-        conversationId: conversation.id,
-        userId,
-        isTyping: Boolean(isTyping),
-      });
+    socket.on("typing", (payload) => {
+      try {
+        const conversation = getConversationForUser(
+          Number(payload?.conversationId),
+          userId
+        );
+        if (!conversation) return;
+        const otherId =
+          conversation.user_a_id === userId
+            ? conversation.user_b_id
+            : conversation.user_a_id;
+        io.to(`user:${otherId}`).emit("typing", {
+          conversationId: conversation.id,
+          userId,
+          isTyping: Boolean(payload?.isTyping),
+        });
+      } catch (error) {
+        console.error("typing failed:", error);
+      }
     });
 
-    socket.on("message:read", ({ conversationId }) => {
-      const conversation = getConversationForUser(Number(conversationId), userId);
-      if (!conversation) return;
-      markConversationRead(conversation.id, userId);
-      const otherId =
-        conversation.user_a_id === userId
-          ? conversation.user_b_id
-          : conversation.user_a_id;
-      io.to(`user:${otherId}`).emit("message:read", {
-        conversationId: conversation.id,
-        readerId: userId,
-        readAt: new Date().toISOString(),
-      });
+    socket.on("message:read", (payload) => {
+      try {
+        const conversation = getConversationForUser(
+          Number(payload?.conversationId),
+          userId
+        );
+        if (!conversation) return;
+        markConversationRead(conversation.id, userId);
+        const otherId =
+          conversation.user_a_id === userId
+            ? conversation.user_b_id
+            : conversation.user_a_id;
+        io.to(`user:${otherId}`).emit("message:read", {
+          conversationId: conversation.id,
+          readerId: userId,
+          readAt: new Date().toISOString(),
+        });
+      } catch (error) {
+        console.error("message:read failed:", error);
+      }
     });
 
     socket.on("disconnect", () => {

@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-export default function Login({ onAuth }) {
+export default function Login({ onAuth, initialError = "", onInteract }) {
   const [mode, setMode] = useState("login");
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -11,6 +11,7 @@ export default function Login({ onAuth }) {
   async function handleSubmit(event) {
     event.preventDefault();
     setError("");
+    onInteract?.();
     setLoading(true);
 
     try {
@@ -20,7 +21,7 @@ export default function Login({ onAuth }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password, displayName }),
       });
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || "Could not continue");
       onAuth(data);
     } catch (err) {
@@ -86,7 +87,7 @@ export default function Login({ onAuth }) {
               required
             />
           </label>
-          {error && <p className="error">{error}</p>}
+          {(error || initialError) && <p className="error">{error || initialError}</p>}
           <button className="primary" type="submit" disabled={loading}>
             {loading ? "Please wait…" : mode === "login" ? "Enter chat" : "Join campus"}
           </button>

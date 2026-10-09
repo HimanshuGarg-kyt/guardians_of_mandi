@@ -1,8 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getSocket } from "../services/socket.js";
+
+const TYPING_THROTTLE_MS = 1000;
 
 export default function MessageInput({ conversation, disabled }) {
   const [text, setText] = useState("");
+  const lastTypingEmitRef = useRef(0);
 
   useEffect(() => {
     setText("");
@@ -11,6 +14,13 @@ export default function MessageInput({ conversation, disabled }) {
   function emitTyping(isTyping) {
     const socket = getSocket();
     if (!socket || !conversation) return;
+    // Throttle "is typing" so we don't emit one event per keystroke. Always
+    // let the stop signal through so the indicator can clear immediately.
+    if (isTyping) {
+      const now = Date.now();
+      if (now - lastTypingEmitRef.current < TYPING_THROTTLE_MS) return;
+      lastTypingEmitRef.current = now;
+    }
     socket.emit("typing", { conversationId: conversation.id, isTyping });
   }
 

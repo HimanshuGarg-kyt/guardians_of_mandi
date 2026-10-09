@@ -59,6 +59,8 @@ input {
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 10px 12px;
+  /* 16px stops iOS Safari from auto-zooming focused inputs. */
+  font-size: 16px;
 }
 .error { color: #ff8f8f; }
 
@@ -72,6 +74,11 @@ input {
   padding: 16px;
   border-bottom: 1px solid var(--line);
 }
+/* min-width:0 lets the name column shrink so a long display name ellipsizes
+   instead of pushing the Sign out button off narrow screens. */
+.profile > div { min-width: 0; }
+.profile strong,
+.profile p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .avatar {
   width: 40px; height: 40px; border-radius: 50%;
   display: grid; place-items: center;
@@ -94,6 +101,7 @@ input {
 .dot { width: 8px; height: 8px; border-radius: 50%; background: #66736e; }
 .dot.on { background: var(--accent); }
 .meta { display: grid; min-width: 0; }
+.meta strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .meta em { color: var(--muted); font-style: normal; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .badge { margin-left: auto; background: var(--accent); color: #06210f; border-radius: 999px; padding: 2px 7px; font-size: 12px; }
 
@@ -108,7 +116,10 @@ main { display: grid; grid-template-rows: 1fr auto; min-width: 0; }
   padding: 16px 20px;
   border-bottom: 1px solid var(--line);
 }
-.search { width: min(240px, 40vw); }
+/* min-width:0 keeps long peer names from squeezing the search box. */
+.chat-header > div { min-width: 0; }
+.chat-header h2 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.search { width: min(240px, 40vw); flex-shrink: 0; }
 .message-list { flex: 1; overflow: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
 .bubble {
   max-width: min(70%, 560px);
@@ -117,6 +128,8 @@ main { display: grid; grid-template-rows: 1fr auto; min-width: 0; }
 }
 .bubble p { margin: 0 0 6px; }
 .bubble span { font-size: 11px; color: var(--muted); }
+/* Muted green-gray fails contrast (2.66:1) on the green "mine" bubble; lighten it. */
+.mine span { color: #d9f3e4; }
 .mine { margin-left: auto; background: var(--mine); }
 .theirs { background: var(--theirs); }
 .typing { color: var(--accent); font-size: 13px; }
@@ -126,5 +139,9 @@ main { display: grid; grid-template-rows: 1fr auto; min-width: 0; }
 
 @media (max-width: 800px) {
   .app { grid-template-columns: 1fr; }
-  .sidebar { max-height: 38vh; }
+  .sidebar {
+    max-height: 38vh;
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+  }
 }

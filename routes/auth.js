@@ -7,20 +7,47 @@ import {
   publicUser,
 } from "../models/User.js";
 import { authMiddleware, signToken } from "../utils/authMiddleware.js";
+import { rateLimit } from "../utils/rateLimit.js";
 
 const router = Router();
 
-router.post("/register", (req, res) => {
-  const { username, password, displayName } = req.body || {};
+const authRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: Number(process.env.AUTH_RATE_LIMIT_MAX) || 60,
+});
+
+const MAX_USERNAME = 200;
+const MAX_DISPLAY_NAME = 200;
+const MAX_PASSWORD = 200;
+
+router.post("/register", authRateLimit, async (req, res) => {
+  const username = String(req.body?.username ?? "").trim();
+  const password = String(req.body?.password ?? "");
+  const displayName = String(req.body?.displayName ?? "").trim();
 
   if (!username || !password) {
     return res.status(400).json({ error: "Username and password are required" });
   }
-  if (String(username).trim().length < 3) {
+  if (username.length < 3) {
     return res.status(400).json({ error: "Username must be at least 3 characters" });
   }
-  if (String(password).length < 6) {
+  if (username.length > MAX_USERNAME) {
+    return res
+      .status(400)
+      .json({ error: `Username must be at most ${MAX_USERNAME} characters` });
+  }
+  if (password.length < 6) {
     return res.status(400).json({ error: "Password must be at least 6 characters" });
+  }
+  if (password.length > MAX_PASSWORD) {
+    return res
+      .status(400)
+      .json({ error: `Password must be at most ${MAX_PASSWORD} characters` });
+  }
+  if (displayName.length > MAX_DISPLAY_NAME) {
+    return res
+      .status(400)
+      .json({ error: `Display name must be at most ${MAX_DISPLAY_NAME} characters` });
   }
   if (findUserByUsername(username)) {
     return res.status(409).json({ error: "Username is already taken" });
@@ -29,8 +56,8 @@ router.post("/register", (req, res) => {
   try {
     const user = createUser({
       username,
-      displayName: displayName?.trim() || username.trim(),
-      passwordHash: bcrypt.hashSync(password, 10),
+      displayName: displayName || username,
+      passwordHash: await bcrypt.hash(password, 10),
     });
     if (!user) {
       return res.status(500).json({ error: "Could not create user" });
@@ -41,22 +68,29 @@ router.post("/register", (req, res) => {
       user: publicUser(user),
     });
   } catch (error) {
-    return res.status(500).json({ error: error.message || "Could not create user" });
+    console.error("register failed:", error);
+    return res.status(500).json({ error: "Could not create user" });
   }
 });
 
-router.post("/login", (req, res) => {
-  const { username, password } = req.body || {};
-  const user = username ? findUserByUsername(username) : null;
+router.post("/login", authRateLimit, async (req, res) => {
+  try {
+    const username = String(req.body?.username ?? "").trim();
+    const password = String(req.body?.password ?? "");
+    const user = username ? findUserByUsername(username) : null;
 
-  if (!user || !bcrypt.compareSync(password || "", user.password_hash)) {
-    return res.status(401).json({ error: "Invalid username or password" });
+    if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+      return res.status(401).json({ error: "Invalid username or password" });
+    }
+
+    return res.json({
+      token: signToken(user),
+      user: publicUser(user),
+    });
+  } catch (error) {
+    console.error("login failed:", error);
+    return res.status(500).json({ error: "Could not sign in" });
   }
-
-  return res.json({
-    token: signToken(user),
-    user: publicUser(user),
-  });
 });
 
 router.get("/me", authMiddleware, (req, res) => {

@@ -20,15 +20,17 @@ export function getMessageById(id) {
 }
 
 export function listMessages(conversationId, search = "") {
-  const query = search.trim();
+  const query = String(search).trim();
   if (query) {
+    // Escape LIKE wildcards so user input is matched literally.
+    const escaped = query.replace(/[\\%_]/g, (ch) => `\\${ch}`);
     return all(
       `SELECT m.*, u.username AS sender_username, u.display_name AS sender_display_name
        FROM messages m
        JOIN users u ON u.id = m.sender_id
-       WHERE m.conversation_id = ? AND m.content LIKE ?
+       WHERE m.conversation_id = ? AND m.content LIKE ? ESCAPE '\\'
        ORDER BY m.created_at ASC, m.id ASC`,
-      [conversationId, `%${query}%`]
+      [conversationId, `%${escaped}%`]
     );
   }
 

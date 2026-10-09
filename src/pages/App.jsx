@@ -6,6 +6,9 @@ import MessageInput from "../components/MessageInput.jsx";
 import { api, getToken, setToken } from "../services/api.js";
 import { connectSocket, disconnectSocket, getSocket } from "../services/socket.js";
 
+const TYPING_CLEAR_MS = 3000;
+const SEARCH_DEBOUNCE_MS = 300;
+
 export default function App() {
   const [token, setTokenState] = useState(getToken());
   const [me, setMe] = useState(null);
@@ -14,6 +17,7 @@ export default function App() {
   const [active, setActive] = useState(null);
   const [messages, setMessages] = useState([]);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [typing, setTyping] = useState(false);
   const [onlineUserIds, setOnlineUserIds] = useState([]);
   const [bootError, setBootError] = useState("");
@@ -21,6 +25,11 @@ export default function App() {
   const activeId = active?.id;
   const activeIdRef = useRef(activeId);
   activeIdRef.current = activeId;
+
+  const conversationsRef = useRef(conversations);
+  conversationsRef.current = conversations;
+
+  const typingTimerRef = useRef(null);
 
   const refreshLists = useCallback(async () => {
     const [userData, convoData] = await Promise.all([
@@ -41,6 +50,34 @@ export default function App() {
     setMessages(data.messages);
   }, []);
 
+  // Surface API failures instead of leaving an unhandled rejection: on an
+  // expired session, log out cleanly with an explanation.
+  const handleApiError = useCallback((error) => {
+    if (error?.status === 401) {
+      setToken(null);
+      setTokenState(null);
+      setMe(null);
+      setUsers([]);
+      setConversations([]);
+      setActive(null);
+      setMessages([]);
+      disconnectSocket();
+      setBootError("Session expired. Please sign in again.");
+    } else {
+      setBootError(error?.message || "Something went wrong");
+    }
+  }, []);
+
+  const clearTypingLater = useCallback(() => {
+    if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+    typingTimerRef.current = setTimeout(() => setTyping(false), TYPING_CLEAR_MS);
+  }, []);
+
+  const stopTyping = useCallback(() => {
+    if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+    setTyping(false);
+  }, []);
+
   useEffect(() => {
     if (!token) return undefined;
     let cancelled = false;
@@ -56,13 +93,22 @@ export default function App() {
         });
 
         socket.on("message:new", (message) => {
-          setConversations((current) => {
-            const exists = current.some((c) => c.id === message.conversationId);
-            if (!exists) {
-              refreshLists();
-              return current;
-            }
-            return current
+          const isActive = activeIdRef.current === message.conversationId;
+          const mine = message.senderId === user.id;
+          const seen = conversationsRef.current.some(
+            (c) => c.id === message.conversationId
+          );
+
+          // Side effects (refetch, socket ack) run outside the state updaters,
+          // which must stay pure (StrictMode invokes them twice).
+          if (!seen) {
+            // Brand-new conversation: refresh the list, then bail.
+            refreshLists().catch(handleApiError);
+            return;
+          }
+
+          setConversations((current) =>
+            current
               .map((c) =>
                 c.id === message.conversationId
                   ? {
@@ -70,10 +116,7 @@ export default function App() {
                       lastMessage: message.content,
                       lastMessageAt: message.createdAt,
                       unreadCount:
-                        message.conversationId === activeIdRef.current ||
-                        message.senderId === user.id
-                          ? 0
-                          : (c.unreadCount || 0) + 1,
+                        isActive || mine ? 0 : (c.unreadCount || 0) + 1,
                     }
                   : c
               )
@@ -81,28 +124,27 @@ export default function App() {
                 String(b.lastMessageAt || "").localeCompare(
                   String(a.lastMessageAt || "")
                 )
-              );
-          });
+              )
+          );
 
-          setActive((current) => {
-            if (current?.id !== message.conversationId) return current;
+          if (isActive) {
             setMessages((msgs) =>
               msgs.some((m) => m.id === message.id) ? msgs : [...msgs, message]
             );
             getSocket()?.emit("message:read", {
               conversationId: message.conversationId,
             });
-            return current;
-          });
+          }
         });
 
         socket.on("typing", (payload) => {
-          setActive((current) => {
-            if (current?.id === payload.conversationId) {
-              setTyping(Boolean(payload.isTyping));
-            }
-            return current;
-          });
+          if (activeIdRef.current !== payload.conversationId) return;
+          if (payload.isTyping) {
+            setTyping(true);
+            clearTypingLater();
+          } else {
+            stopTyping();
+          }
         });
 
         socket.on("message:read", (payload) => {
@@ -121,7 +163,9 @@ export default function App() {
         if (!cancelled) setMe(user);
       } catch (error) {
         if (!cancelled) {
-          setBootError(error.message);
+          setBootError(error.status === 401
+            ? "Session expired. Please sign in again."
+            : error.message);
           setToken(null);
           setTokenState(null);
         }
@@ -131,16 +175,31 @@ export default function App() {
     return () => {
       cancelled = true;
       disconnectSocket();
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
     };
-  }, [token, refreshLists]);
+  }, [token, refreshLists, handleApiError, clearTypingLater, stopTyping]);
+
+  // Debounce the in-chat search so we don't fire a request per keystroke.
+  useEffect(() => {
+    const timer = setTimeout(
+      () => setDebouncedSearch(search),
+      SEARCH_DEBOUNCE_MS
+    );
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Join/read only when the conversation changes — not on every keystroke.
+  useEffect(() => {
+    if (!activeId) return;
+    getSocket()?.emit("conversation:join", { conversationId: activeId });
+    getSocket()?.emit("message:read", { conversationId: activeId });
+    stopTyping();
+  }, [activeId, stopTyping]);
 
   useEffect(() => {
     if (!activeId) return;
-    loadMessages(activeId, search);
-    getSocket()?.emit("conversation:join", { conversationId: activeId });
-    getSocket()?.emit("message:read", { conversationId: activeId });
-    setTyping(false);
-  }, [activeId, search, loadMessages]);
+    loadMessages(activeId, debouncedSearch).catch(handleApiError);
+  }, [activeId, debouncedSearch, loadMessages, handleApiError]);
 
   async function handleAuth({ token: nextToken }) {
     setToken(nextToken);
@@ -157,29 +216,46 @@ export default function App() {
     setConversations([]);
     setActive(null);
     setMessages([]);
+    setSearch("");
+    setDebouncedSearch("");
+    setBootError("");
     disconnectSocket();
   }
 
   async function handleSelectUser(user) {
-    const existing = conversations.find((c) => c.otherUser.id === user.id);
-    if (existing) {
-      setActive(existing);
+    try {
+      const existing = conversations.find((c) => c.otherUser.id === user.id);
+      if (existing) {
+        setActive(existing);
+        setSearch("");
+        setDebouncedSearch("");
+        return;
+      }
+      const { conversation } = await api("/api/conversations", {
+        method: "POST",
+        body: { userId: user.id },
+      });
+      setConversations((current) =>
+        current.some((c) => c.id === conversation.id) ? current : [conversation, ...current]
+      );
+      setActive(conversation);
       setSearch("");
-      return;
+      setDebouncedSearch("");
+    } catch (error) {
+      handleApiError(error);
     }
-    const { conversation } = await api("/api/conversations", {
-      method: "POST",
-      body: { userId: user.id },
-    });
-    setConversations((current) => [conversation, ...current]);
-    setActive(conversation);
-    setSearch("");
   }
 
   const sidebarConversations = useMemo(() => conversations, [conversations]);
 
   if (!token) {
-    return <Login onAuth={handleAuth} />;
+    return (
+      <Login
+        onAuth={handleAuth}
+        initialError={bootError}
+        onInteract={() => setBootError("")}
+      />
+    );
   }
 
   if (!me) {

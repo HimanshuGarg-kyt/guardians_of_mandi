@@ -9,7 +9,8 @@
     "server": "node server.js",
     "client": "vite",
     "build": "vite build",
-    "start": "node server.js"
+    "start": "node server.js",
+    "smoke": "node smoke-test.mjs"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

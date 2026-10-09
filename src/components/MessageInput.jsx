@@ -3,6 +3,13 @@ import { getSocket } from "../services/socket.js";
 
 const TYPING_THROTTLE_MS = 1000;
 
+function conversationTitle(conversation) {
+  if (!conversation) return "";
+  return conversation.isGroup
+    ? conversation.name || "group"
+    : conversation.otherUser.displayName;
+}
+
 export default function MessageInput({ conversation, disabled }) {
   const [text, setText] = useState("");
   const lastTypingEmitRef = useRef(0);
@@ -48,7 +55,7 @@ export default function MessageInput({ conversation, disabled }) {
         disabled={disabled}
         placeholder={
           conversation
-            ? `Message ${conversation.otherUser.displayName}`
+            ? `Message ${conversationTitle(conversation)}`
             : "Choose someone to chat"
         }
         onChange={(e) => {

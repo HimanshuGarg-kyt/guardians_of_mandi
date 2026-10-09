@@ -10,6 +10,8 @@ import { initDb } from "./config/db.js";
 import authRoutes from "./routes/auth.js";
 import userRoutes from "./routes/users.js";
 import conversationRoutes from "./routes/conversations.js";
+import settingsRoutes from "./routes/settings.js";
+import statusRoutes from "./routes/statuses.js";
 import { initChatSocket } from "./socket/chat.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -40,6 +42,8 @@ app.get("/api/health", (_req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/conversations", conversationRoutes);
+app.use("/api/settings", settingsRoutes);
+app.use("/api/statuses", statusRoutes);
 
 // Serve a real robots.txt (and 404 the favicon) instead of letting the SPA
 // fallback answer them with index.html, which Lighthouse flags as invalid.

@@ -5,6 +5,8 @@ import {
   findUserById,
   findUserByUsername,
   publicUser,
+  setPasswordHash,
+  updateUserProfile,
 } from "../models/User.js";
 import { authMiddleware, signToken } from "../utils/authMiddleware.js";
 import { rateLimit } from "../utils/rateLimit.js";
@@ -97,6 +99,54 @@ router.get("/me", authMiddleware, (req, res) => {
   const user = findUserById(req.user.id);
   if (!user) return res.status(401).json({ error: "User not found" });
   return res.json({ user: publicUser(user) });
+});
+
+const AVATAR_COLOR_RE = /^#[0-9a-fA-F]{3,8}$/;
+
+router.patch("/me", authMiddleware, (req, res) => {
+  const displayName = String(req.body?.displayName ?? "").trim();
+  const avatarColor = String(req.body?.avatarColor ?? "").trim();
+
+  if (!displayName) {
+    return res.status(400).json({ error: "Display name is required" });
+  }
+  if (displayName.length > MAX_DISPLAY_NAME) {
+    return res
+      .status(400)
+      .json({ error: `Display name must be at most ${MAX_DISPLAY_NAME} characters` });
+  }
+  if (avatarColor && !AVATAR_COLOR_RE.test(avatarColor)) {
+    return res.status(400).json({ error: "Avatar color must be a hex color" });
+  }
+
+  const user = updateUserProfile(req.user.id, {
+    displayName,
+    ...(avatarColor ? { avatarColor } : {}),
+  });
+  return res.json({ user: publicUser(user) });
+});
+
+router.post("/me/password", authRateLimit, authMiddleware, async (req, res) => {
+  const currentPassword = String(req.body?.currentPassword ?? "");
+  const newPassword = String(req.body?.newPassword ?? "");
+
+  const user = findUserById(req.user.id);
+  if (!user) return res.status(401).json({ error: "User not found" });
+
+  if (!(await bcrypt.compare(currentPassword, user.password_hash))) {
+    return res.status(401).json({ error: "Current password is incorrect" });
+  }
+  if (newPassword.length < 6) {
+    return res.status(400).json({ error: "Password must be at least 6 characters" });
+  }
+  if (newPassword.length > MAX_PASSWORD) {
+    return res
+      .status(400)
+      .json({ error: `Password must be at most ${MAX_PASSWORD} characters` });
+  }
+
+  setPasswordHash(user.id, await bcrypt.hash(newPassword, 10));
+  return res.json({ ok: true });
 });
 
 export default router;

@@ -3,6 +3,7 @@ import path from "path";
 import { createRequire } from "module";
 import { fileURLToPath } from "url";
 import initSqlJs from "sql.js";
+import { runMigrations } from "./migrate.js";
 
 const require = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -67,6 +68,7 @@ export async function initDb() {
 
   db.exec(fs.readFileSync(schemaPath, "utf8"));
   persist();
+  await runMigrations();
   return db;
 }
 

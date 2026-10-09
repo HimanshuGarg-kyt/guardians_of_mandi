@@ -9,6 +9,8 @@ router.get("/", authMiddleware, (req, res) => {
     id: user.id,
     username: user.username,
     displayName: user.display_name,
+    avatarColor: user.avatar_color || "#7bd389",
+    lastSeenAt: user.last_seen_at || null,
     createdAt: user.created_at,
   }));
   res.json({ users });

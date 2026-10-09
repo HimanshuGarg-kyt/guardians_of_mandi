@@ -1,0 +1,130 @@
+:root {
+  --bg: #0f1412;
+  --panel: #18211d;
+  --panel-2: #22302a;
+  --line: #2f433b;
+  --text: #edf3ef;
+  --muted: #9bb0a6;
+  --accent: #7bd389;
+  --mine: #1f6f4a;
+  --theirs: #2a3a34;
+  font-family: "Segoe UI", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body { background: radial-gradient(circle at top, #1c3a2e, var(--bg) 45%); color: var(--text); }
+
+.auth-shell, .app { min-height: 100%; }
+.auth-shell {
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.auth-card, .sidebar, .chat-window, .composer, .chat-empty {
+  background: rgba(24, 33, 29, 0.92);
+  border: 1px solid var(--line);
+}
+
+.auth-card {
+  width: min(420px, 100%);
+  padding: 28px;
+  border-radius: 20px;
+}
+
+.eyebrow { letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); font-size: 12px; }
+h1, h2, h3 { margin: 8px 0; }
+.lede, .muted, .chat-header p, .profile p { color: var(--muted); }
+
+.tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 18px 0; }
+.tabs button, .primary, .composer button, .profile button, .sidebar li button {
+  border: 0;
+  cursor: pointer;
+}
+.tabs button, .profile button {
+  background: var(--panel-2);
+  color: var(--text);
+  padding: 10px;
+  border-radius: 10px;
+}
+.tabs .active, .primary, .composer button { background: var(--accent); color: #06210f; font-weight: 700; }
+.primary, .composer button { width: 100%; padding: 12px; border-radius: 12px; }
+
+form { display: grid; gap: 12px; }
+label { display: grid; gap: 6px; font-size: 14px; }
+input {
+  background: #101816;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.error { color: #ff8f8f; }
+
+.app { display: grid; grid-template-columns: 320px 1fr; height: 100%; }
+.sidebar { border-right: 1px solid var(--line); display: flex; flex-direction: column; overflow: auto; }
+.profile {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid var(--line);
+}
+.avatar {
+  width: 40px; height: 40px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--accent); color: #06210f; font-weight: 800;
+}
+.sidebar h3 { padding: 12px 16px 0; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.sidebar ul { list-style: none; margin: 0; padding: 8px; }
+.sidebar li button {
+  width: 100%;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  background: transparent;
+  color: var(--text);
+  padding: 10px;
+  border-radius: 12px;
+  text-align: left;
+}
+.sidebar li button.active, .sidebar li button:hover { background: var(--panel-2); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: #66736e; }
+.dot.on { background: var(--accent); }
+.meta { display: grid; min-width: 0; }
+.meta em { color: var(--muted); font-style: normal; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.badge { margin-left: auto; background: var(--accent); color: #06210f; border-radius: 999px; padding: 2px 7px; font-size: 12px; }
+
+main { display: grid; grid-template-rows: 1fr auto; min-width: 0; }
+.chat-empty, .chat-window { display: flex; flex-direction: column; min-height: 0; }
+.chat-empty { place-items: center; text-align: center; padding: 48px; }
+.chat-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+}
+.search { width: min(240px, 40vw); }
+.message-list { flex: 1; overflow: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+.bubble {
+  max-width: min(70%, 560px);
+  padding: 10px 12px;
+  border-radius: 16px;
+}
+.bubble p { margin: 0 0 6px; }
+.bubble span { font-size: 11px; color: var(--muted); }
+.mine { margin-left: auto; background: var(--mine); }
+.theirs { background: var(--theirs); }
+.typing { color: var(--accent); font-size: 13px; }
+.composer { display: flex; gap: 8px; padding: 12px; }
+.composer input { flex: 1; }
+.composer button { width: auto; padding-inline: 20px; }
+
+@media (max-width: 800px) {
+  .app { grid-template-columns: 1fr; }
+  .sidebar { max-height: 38vh; }
+}

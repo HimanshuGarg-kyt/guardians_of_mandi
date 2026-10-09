@@ -49,8 +49,6 @@ export default function App() {
       try {
         const { user } = await api("/api/auth/me");
         if (cancelled) return;
-        setMe(user);
-        await refreshLists();
         const socket = connectSocket(token);
 
         socket.on("presence:update", ({ onlineUserIds: ids }) => {
@@ -110,12 +108,17 @@ export default function App() {
         socket.on("message:read", (payload) => {
           setMessages((msgs) =>
             msgs.map((m) =>
-              m.conversationId === payload.conversationId && !m.readAt
+              m.conversationId === payload.conversationId &&
+              m.senderId === user.id &&
+              !m.readAt
                 ? { ...m, readAt: payload.readAt }
                 : m
             )
           );
         });
+
+        await refreshLists();
+        if (!cancelled) setMe(user);
       } catch (error) {
         if (!cancelled) {
           setBootError(error.message);
@@ -139,10 +142,10 @@ export default function App() {
     setTyping(false);
   }, [activeId, search, loadMessages]);
 
-  async function handleAuth({ token: nextToken, user }) {
+  async function handleAuth({ token: nextToken }) {
     setToken(nextToken);
     setTokenState(nextToken);
-    setMe(user);
+    setMe(null);
     setBootError("");
   }
 
@@ -175,8 +178,17 @@ export default function App() {
 
   const sidebarConversations = useMemo(() => conversations, [conversations]);
 
-  if (!token || !me) {
+  if (!token) {
     return <Login onAuth={handleAuth} />;
+  }
+
+  if (!me) {
+    return (
+      <div className="auth-shell">
+        <p>Connecting to campus chat…</p>
+        {bootError && <p className="error">{bootError}</p>}
+      </div>
+    );
   }
 
   return (

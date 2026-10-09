@@ -58,29 +58,37 @@ export function initChatSocket(io) {
     });
 
     socket.on("message:send", ({ conversationId, content }, ack) => {
-      const text = String(content || "").trim();
-      if (!text) {
-        ack?.({ ok: false, error: "Message cannot be empty" });
-        return;
-      }
+      try {
+        const text = String(content || "").trim();
+        if (!text) {
+          ack?.({ ok: false, error: "Message cannot be empty" });
+          return;
+        }
 
-      const conversation = getConversationForUser(Number(conversationId), userId);
-      if (!conversation) {
-        ack?.({ ok: false, error: "Conversation not found" });
-        return;
-      }
+        const conversation = getConversationForUser(Number(conversationId), userId);
+        if (!conversation) {
+          ack?.({ ok: false, error: "Conversation not found" });
+          return;
+        }
 
-      const saved = formatMessage(
-        createMessage({
+        const created = createMessage({
           conversationId: conversation.id,
           senderId: userId,
           content: text,
-        })
-      );
+        });
+        if (!created) {
+          ack?.({ ok: false, error: "Could not save message" });
+          return;
+        }
 
-      io.to(`user:${conversation.user_a_id}`).emit("message:new", saved);
-      io.to(`user:${conversation.user_b_id}`).emit("message:new", saved);
-      ack?.({ ok: true, message: saved });
+        const saved = formatMessage(created);
+
+        io.to(`user:${conversation.user_a_id}`).emit("message:new", saved);
+        io.to(`user:${conversation.user_b_id}`).emit("message:new", saved);
+        ack?.({ ok: true, message: saved });
+      } catch (error) {
+        ack?.({ ok: false, error: error.message || "Could not send message" });
+      }
     });
 
     socket.on("typing", ({ conversationId, isTyping }) => {

@@ -26,16 +26,23 @@ router.post("/register", (req, res) => {
     return res.status(409).json({ error: "Username is already taken" });
   }
 
-  const user = createUser({
-    username,
-    displayName: displayName?.trim() || username.trim(),
-    passwordHash: bcrypt.hashSync(password, 10),
-  });
+  try {
+    const user = createUser({
+      username,
+      displayName: displayName?.trim() || username.trim(),
+      passwordHash: bcrypt.hashSync(password, 10),
+    });
+    if (!user) {
+      return res.status(500).json({ error: "Could not create user" });
+    }
 
-  return res.status(201).json({
-    token: signToken(user),
-    user: publicUser(user),
-  });
+    return res.status(201).json({
+      token: signToken(user),
+      user: publicUser(user),
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message || "Could not create user" });
+  }
 });
 
 router.post("/login", (req, res) => {

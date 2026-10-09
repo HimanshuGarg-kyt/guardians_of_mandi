@@ -30,8 +30,11 @@ router.post("/", authMiddleware, (req, res) => {
   try {
     const conversation = getOrCreateDirectConversation(req.user.id, otherUserId);
     const detailed = listConversationsForUser(req.user.id).find(
-      (row) => row.id === conversation.id
+      (row) => Number(row.id) === Number(conversation?.id)
     );
+    if (!detailed) {
+      return res.status(500).json({ error: "Conversation could not be loaded" });
+    }
     res.status(201).json({ conversation: formatConversation(detailed) });
   } catch (error) {
     res.status(400).json({ error: error.message });

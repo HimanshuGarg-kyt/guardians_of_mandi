@@ -12,10 +12,12 @@ const dbPath = path.join(dataDir, "chat.db");
 const schemaPath = path.join(rootDir, "database", "schema.sql");
 
 let db;
+let lastId = 0;
 
 function persist() {
   if (!db) return;
   fs.mkdirSync(dataDir, { recursive: true });
+  // sql.js export() resets last_insert_rowid(), so callers must snapshot the id first.
   fs.writeFileSync(dbPath, Buffer.from(db.export()));
 }
 
@@ -43,6 +45,7 @@ export function getDb() {
 
 export function run(sql, params = []) {
   getDb().run(sql, params);
+  lastId = Number(get("SELECT last_insert_rowid() AS id")?.id || 0);
   persist();
 }
 
@@ -62,6 +65,5 @@ export function get(sql, params = []) {
 }
 
 export function lastInsertId() {
-  const row = get("SELECT last_insert_rowid() AS id");
-  return Number(row.id);
+  return lastId;
 }

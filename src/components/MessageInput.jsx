@@ -17,10 +17,15 @@ export default function MessageInput({ conversation, disabled }) {
   function send(event) {
     event.preventDefault();
     const content = text.trim();
-    if (!content || !conversation) return;
-    getSocket()?.emit("message:send", {
+    const socket = getSocket();
+    if (!content || !conversation || !socket) return;
+    socket.emit("message:send", {
       conversationId: conversation.id,
       content,
+    }, (response) => {
+      if (response && !response.ok) {
+        setText(content);
+      }
     });
     setText("");
     emitTyping(false);
